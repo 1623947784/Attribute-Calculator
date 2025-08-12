@@ -1,4 +1,5 @@
-name,level,base_attack,base_defense,max_health,attack_growth,defense_growth,health_growth
-勇者,1,15,8,120,2.5,1.2,10
-法师,5,10,5,80,3.0,0.8,8
-战士,10,20,12,200,1.8,1.5,15
+name,level,base_attack,base_defense,max_health,attack_growth,defense_growth,health_growth,attack_bonus,defense_bonus,health_bonus
+
+勇者,1,15,8,120,2.5,1.2,10,10,10,10
+法师,5,10,5,80,3.0,0.8,8,10,10,10
+战士,10,20,12,200,1.8,1.5,15,10,10,10
