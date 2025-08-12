@@ -23,7 +23,7 @@ class Effect:
     attack_bonus_percent/defense_bonus_percent/health_bonus_percent: 百分比加成
     duration: 持续回合数（可扩展）
     """
-    def __init__(self, name: str, attack_bonus_percent: float = 0.0, defense_bonus_percent: float = 0.0, health_bonus_percent: float = 0.0, duration: int = 10):
+    def __init__(self, name: str, attack_bonus_percent: float = 0.0, defense_bonus_percent: float = 0.0, health_bonus_percent: float = 0.0, duration: int = 1):
         self.name = name
         self.attack_bonus_percent = attack_bonus_percent
         self.defense_bonus_percent = defense_bonus_percent
@@ -60,16 +60,16 @@ class Character:
         - 基础属性 + 成长
         - 所有效果的百分比加成叠加
         """
-        attack = self.base_attack + self.level * self.attack_growth
-        defense = self.base_defense + self.level * self.defense_growth
-        health = self.max_health + self.level * self.health_growth
+        attack = self.base_attack + (self.level - 1) * self.attack_growth
+        defense = self.base_defense + (self.level - 1) * self.defense_growth
+        health = self.max_health + (self.level - 1) * self.health_growth
         # 叠加所有效果的百分比加成
         attack_bonus = sum(e.attack_bonus_percent for e in self.effects)
         defense_bonus = sum(e.defense_bonus_percent for e in self.effects)
         health_bonus = sum(e.health_bonus_percent for e in self.effects)
         final_attack = attack * (1 + attack_bonus / 100)
         final_defense = defense * (1 + defense_bonus / 100)
-        final_health = health * (1 + health_bonus / 100)
+        final_health = health * (1+ health_bonus / 100)
         return {
             'final_attack': final_attack,
             'final_defense': final_defense,
@@ -96,6 +96,29 @@ def load_characters_from_csv(csv_path: str) -> List[Character]:
                     defense_growth=float(row.get('defense_growth', 0)),
                     health_growth=float(row.get('health_growth', 0)),
                 )
+                # 自动读取attack_bonus/defense_bonus/health_bonus等加成字段
+                attack_bonus = 0.0
+                defense_bonus = 0.0
+                health_bonus = 0.0
+                # 兼容不同分隔符（有些csv编辑器会用全角逗号）
+                for k in row:
+                    if 'attack_bonus' in k:
+                        try:
+                            attack_bonus = float(row[k])
+                        except:
+                            pass
+                    if 'defense_bonus' in k:
+                        try:
+                            defense_bonus = float(row[k])
+                        except:
+                            pass
+                    if 'health_bonus' in k:
+                        try:
+                            health_bonus = float(row[k])
+                        except:
+                            pass
+                if attack_bonus or defense_bonus or health_bonus:
+                    c.apply_effect(Effect('CSV加成', attack_bonus_percent=attack_bonus, defense_bonus_percent=defense_bonus, health_bonus_percent=health_bonus))
                 characters.append(c)
             except Exception as e:
                 logging.error(f"加载角色失败: {row}, 错误: {e}")
@@ -174,7 +197,7 @@ def logic_consistency_tests():
     c.apply_effect(Effect('攻击+10%', attack_bonus_percent=10))
     c.apply_effect(Effect('攻击+10%', attack_bonus_percent=10))
     attrs = c.calculate_final_attributes()
-    expected = (10 + 10 * 2) * 1.2
+    expected = (10 + (10 - 1) * 2) * 1.2
     pass_check = abs(attrs['final_attack'] - expected) < 1e-6
     logging.info(f"叠加测试: 期望 {expected}, 实际 {attrs['final_attack']}, 状态: {'Pass' if pass_check else 'Fail'}")
     # 冲突规则测试：+10%和-10%应抵消
@@ -182,7 +205,7 @@ def logic_consistency_tests():
     c.apply_effect(Effect('攻击+10%', attack_bonus_percent=10))
     c.apply_effect(Effect('攻击-10%', attack_bonus_percent=-10))
     attrs2 = c.calculate_final_attributes()
-    expected2 = (10 + 10 * 2) * 1.0
+    expected2 = (10 + (10 - 1) * 2) * 1.0
     pass_check2 = abs(attrs2['final_attack'] - expected2) < 1e-6
     logging.info(f"冲突测试: 期望 {expected2}, 实际 {attrs2['final_attack']}, 状态: {'Pass' if pass_check2 else 'Fail'}")
     print('逻辑一致性测试完成，详细见 test_report.log')
