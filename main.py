@@ -1,46 +1,69 @@
 import csv
+# 用于日志记录
 import logging
+# 类型提示
 from typing import List, Optional
 
-# 日志配置
+
+# 日志配置，既输出到文件也输出到控制台
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[logging.FileHandler('test_report.log', encoding='utf-8'), logging.StreamHandler()]
 )
 
+
+# 角色最大等级
 MAX_LEVEL = 100
 
+
 class Effect:
-    def __init__(self, name: str, attack_bonus_percent: float = 0.0, defense_bonus_percent: float = 0.0, health_bonus_percent: float = 0.0, duration: int = 1):
+    """
+    技能或效果类，表示对角色属性的增益/减益效果
+    attack_bonus_percent/defense_bonus_percent/health_bonus_percent: 百分比加成
+    duration: 持续回合数（可扩展）
+    """
+    def __init__(self, name: str, attack_bonus_percent: float = 0.0, defense_bonus_percent: float = 0.0, health_bonus_percent: float = 0.0, duration: int = 10):
         self.name = name
         self.attack_bonus_percent = attack_bonus_percent
         self.defense_bonus_percent = defense_bonus_percent
         self.health_bonus_percent = health_bonus_percent
         self.duration = duration
 
+
 class Character:
+    """
+    角色类，包含基础属性、成长、效果列表及属性计算方法
+    """
     def __init__(self, name: str, level: int, base_attack: float, base_defense: float, max_health: float, attack_growth: float = 0.0, defense_growth: float = 0.0, health_growth: float = 0.0):
-        self.name = name
-        self.level = level
-        self.base_attack = base_attack
-        self.base_defense = base_defense
-        self.max_health = max_health
-        self.attack_growth = attack_growth
-        self.defense_growth = defense_growth
-        self.health_growth = health_growth
-        self.effects: List[Effect] = []
+        self.name = name  # 角色名
+        self.level = level  # 等级
+        self.base_attack = base_attack  # 基础攻击
+        self.base_defense = base_defense  # 基础防御
+        self.max_health = max_health  # 基础生命
+        self.attack_growth = attack_growth  # 攻击成长
+        self.defense_growth = defense_growth  # 防御成长
+        self.health_growth = health_growth  # 生命成长
+        self.effects: List[Effect] = []  # 当前作用于角色的效果列表
 
     def apply_effect(self, effect: Effect):
+        """施加一个效果到角色上（可叠加）"""
         self.effects.append(effect)
 
     def clear_effects(self):
+        """清除所有效果（用于测试或回合重置）"""
         self.effects = []
 
     def calculate_final_attributes(self):
+        """
+        计算最终属性：
+        - 基础属性 + 成长
+        - 所有效果的百分比加成叠加
+        """
         attack = self.base_attack + self.level * self.attack_growth
         defense = self.base_defense + self.level * self.defense_growth
         health = self.max_health + self.level * self.health_growth
+        # 叠加所有效果的百分比加成
         attack_bonus = sum(e.attack_bonus_percent for e in self.effects)
         defense_bonus = sum(e.defense_bonus_percent for e in self.effects)
         health_bonus = sum(e.health_bonus_percent for e in self.effects)
@@ -54,6 +77,10 @@ class Character:
         }
 
 def load_characters_from_csv(csv_path: str) -> List[Character]:
+    """
+    从CSV文件加载角色数据，支持自定义字段扩展。
+    每行数据转为Character对象，异常行自动记录日志。
+    """
     characters = []
     with open(csv_path, encoding='utf-8') as f:
         reader = csv.DictReader(f)
@@ -75,6 +102,11 @@ def load_characters_from_csv(csv_path: str) -> List[Character]:
     return characters
 
 def boundary_and_exception_tests():
+    """
+    自动化边界值与异常值测试：
+    - 遍历极端/非法输入，检查属性计算合理性与异常处理
+    - 结果写入 test_report.csv
+    """
     test_cases = [
         # 边界值
         {'desc': 'level=0', 'level': 0, 'base_attack': 10, 'attack_growth': 2},
@@ -89,6 +121,7 @@ def boundary_and_exception_tests():
     report = []
     for case in test_cases:
         try:
+            # 构造角色对象
             c = Character(
                 name='测试角色',
                 level=int(case['level']),
@@ -97,10 +130,11 @@ def boundary_and_exception_tests():
                 max_health=100,
                 attack_growth=float(case['attack_growth'])
             )
+            # 如有特殊效果，施加
             if 'effect' in case:
                 c.apply_effect(case['effect'])
             attrs = c.calculate_final_attributes()
-            # 合理性检查
+            # 合理性检查：攻击≥0，生命>0
             pass_check = attrs['final_attack'] >= 0 and attrs['final_health'] > 0
             report.append([
                 case['desc'],
@@ -112,6 +146,7 @@ def boundary_and_exception_tests():
             ])
             logging.info(f"测试: {case['desc']} 输入: {case} 结果: {attrs} 状态: {'Pass' if pass_check else 'Fail'}")
         except Exception as e:
+            # 异常处理
             report.append([
                 case['desc'],
                 str(case),
@@ -121,7 +156,7 @@ def boundary_and_exception_tests():
                 str(e)
             ])
             logging.error(f"测试: {case['desc']} 输入: {case} 错误: {e}")
-    # 写入报告
+    # 写入测试报告
     with open('test_report.csv', 'w', encoding='utf-8', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['测试项描述', '输入参数', '预期行为', '实际行为', '测试状态', '失败原因/错误信息'])
@@ -129,7 +164,12 @@ def boundary_and_exception_tests():
     print('测试完成，报告已生成 test_report.csv')
 
 def logic_consistency_tests():
-    # 叠加规则
+    """
+    逻辑一致性测试：
+    - 检查效果叠加是否为线性相加
+    - 检查正负效果冲突时是否正确抵消
+    """
+    # 叠加规则测试：两个+10%攻击效果应为+20%
     c = Character('叠加测试', 10, 10, 5, 100, attack_growth=2)
     c.apply_effect(Effect('攻击+10%', attack_bonus_percent=10))
     c.apply_effect(Effect('攻击+10%', attack_bonus_percent=10))
@@ -137,7 +177,7 @@ def logic_consistency_tests():
     expected = (10 + 10 * 2) * 1.2
     pass_check = abs(attrs['final_attack'] - expected) < 1e-6
     logging.info(f"叠加测试: 期望 {expected}, 实际 {attrs['final_attack']}, 状态: {'Pass' if pass_check else 'Fail'}")
-    # 冲突规则
+    # 冲突规则测试：+10%和-10%应抵消
     c.clear_effects()
     c.apply_effect(Effect('攻击+10%', attack_bonus_percent=10))
     c.apply_effect(Effect('攻击-10%', attack_bonus_percent=-10))
@@ -151,6 +191,11 @@ import argparse
 import os
 
 def main():
+    """
+    主程序入口：
+    - 支持命令行参数加载自定义CSV并显示属性
+    - 自动执行边界、异常、逻辑一致性测试
+    """
     parser = argparse.ArgumentParser(description='属性计算器自动测试')
     parser.add_argument('--csv', type=str, default=None, help='角色数据CSV文件路径')
     parser.add_argument('--show', action='store_true', help='显示CSV角色属性计算结果')
@@ -160,6 +205,7 @@ def main():
     boundary_and_exception_tests()
     logic_consistency_tests()
 
+    # 如指定csv参数，加载并显示角色属性
     if args.csv and os.path.exists(args.csv):
         chars = load_characters_from_csv(args.csv)
         print(f'从 {args.csv} 加载角色 {len(chars)} 个:')
